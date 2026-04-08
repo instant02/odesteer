@@ -208,13 +208,12 @@ odesteer/
 ## Citation
 
 ```bibtex
-@inproceedings{zhao2026odesteer,
-      title={ODESteer: A Unified ODE-Based Steering Framework for LLM Alignment},
-      author={Hongjue Zhao* and Haosen Sun* and Jiangtao Kong and
-               Xiaochang Li and Qineng Wang and Liwei Jiang and Qi Zhu and 
-               Tarek F. Abdelzaher and Yejin Choi and Manling Li† and Huajie Shao†},
-      booktitle={The Fourteenth International Conference on Learning Representations},
-      year={2026},
-      url={https://odesteer.github.io/},
+@article{zhao2026odesteer,
+  title={ODESteer: A Unified ODE-Based Steering Framework for LLM Alignment},
+  author={Zhao*, Hongjue and Sun*, Haosen and Kong, Jiangtao and Li, Xiaochang and
+          Wang, Qineng and Jiang, Liwei and Zhu, Qi and Abdelzaher, Tarek and
+          Choi, Yejin and Li†, Manling and Shao†, Huajie},
+  journal={arXiv preprint arXiv:2602.17560},
+  year={2026}
 }
 ```
