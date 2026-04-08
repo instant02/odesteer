@@ -210,9 +210,7 @@ odesteer/
 ```bibtex
 @article{zhao2026odesteer,
   title={ODESteer: A Unified ODE-Based Steering Framework for LLM Alignment},
-  author={Zhao*, Hongjue and Sun*, Haosen and Kong, Jiangtao and Li, Xiaochang and
-          Wang, Qineng and Jiang, Liwei and Zhu, Qi and Abdelzaher, Tarek and
-          Choi, Yejin and Li†, Manling and Shao†, Huajie},
+  author={Zhao*, Hongjue and Sun*, Haosen and Kong, Jiangtao and Li, Xiaochang and Wang, Qineng and Jiang, Liwei and Zhu, Qi and Abdelzaher, Tarek and Choi, Yejin and Li†, Manling and Shao†, Huajie},
   journal={arXiv preprint arXiv:2602.17560},
   year={2026}
 }
