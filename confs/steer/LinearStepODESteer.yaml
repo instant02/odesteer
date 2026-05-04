@@ -1,0 +1,5 @@
+type: LinearStepODESteer
+kwargs:
+  lin_clf_type: lr
+T: 1.0
+name: ${steer.type}-${steer.kwargs.lin_clf_type}-T${steer.T}

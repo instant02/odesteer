@@ -7,7 +7,7 @@ from abc import abstractmethod
 from torch import Tensor
 
 from ._base_steer import Steer
-from ..utils.kernels import KernelClassifier, RFFClassifier
+from ..utils.kernels import KernelClassifier, LinearClassifier, MLPClassifier, RFFClassifier, MLPClassifier
 from ..utils.kernels import NormedPolyClassifier
 
 
@@ -48,3 +48,18 @@ class RFFStepODESteer(BaseStepODESteer):
     '''
     def _init_clf(self, **kwargs) -> RFFClassifier:
         return RFFClassifier(**kwargs)
+
+
+class LinearStepODESteer(BaseStepODESteer):
+    '''
+    커널 없이 raw activation 위에서 직접 LR/SVM을 학습하는 one-step 스티어.
+    grad(X) = coef (상수)이므로 vector field가 X 전체에서 동일한 방향을 가리킴.
+    ablation: kernel approximation이 실제로 얼마나 기여하는지 확인용.
+    '''
+    def _init_clf(self, **kwargs) -> LinearClassifier:
+        return LinearClassifier(**kwargs)
+    
+class MLPStepODESteer(BaseStepODESteer):
+    def _init_clf(self, **kwargs):
+        return MLPClassifier(**kwargs)
+

@@ -97,6 +97,43 @@ class KernelClassifier(nn.Module):
         return coef, intercept    
 
 
+class LinearClassifier(nn.Module):
+    """
+    Kernel 없이 raw activation 위에서 직접 LR/SVM 학습.
+    grad(X) = coef (상수 — X에 무관).
+    """
+    def __init__(self, lin_clf_type: Literal['lr', 'svm'] = 'lr', **kwargs):
+        super().__init__()
+        self.lin_clf_type = lin_clf_type
+        self.fitted = False
+
+    def fit(self, pos_X: Tensor, neg_X: Tensor) -> 'LinearClassifier':
+        pi = len(pos_X) / (len(pos_X) + len(neg_X))
+        self.dre_coeff = (1 - pi) / pi
+        X = torch.cat([pos_X, neg_X], dim=0)
+        y = torch.cat([torch.ones(len(pos_X)), torch.zeros(len(neg_X))])
+
+        if self.lin_clf_type == 'lr':
+            clf = LogisticRegression(max_iter=1000)
+        elif self.lin_clf_type == 'svm':
+            clf = LinearSVC(max_iter=1000)
+        else:
+            raise ValueError(f'Invalid lin_clf_type: {self.lin_clf_type}')
+
+        clf.fit(X.cpu().numpy(), y.cpu().numpy())
+        self.register_buffer('coef', torch.as_tensor(clf.coef_.ravel(), dtype=X.dtype))
+        self.register_buffer('intercept', torch.as_tensor(clf.intercept_.ravel(), dtype=X.dtype))
+        self.fitted = True
+        return self
+
+    def predict_proba(self, X: Tensor) -> Tensor:
+        return (X @ self.coef + self.intercept).sigmoid()
+
+    def grad(self, X: Tensor) -> Tensor:
+        """선형 분류기의 gradient는 coef 상수 — X 전체에 동일하게 broadcast."""
+        return self.coef.unsqueeze(0).expand_as(X) * self.dre_coeff
+
+
 class RFFClassifier(KernelClassifier):
     def __init__(
         self,
@@ -132,3 +169,56 @@ class NormedPolyClassifier(KernelClassifier):
     ):
         super().__init__(lin_clf_type)
         self.kernel = NormedPolyCntSketch(degree, n_components, gamma, coef0)
+
+
+class MLPClassifier(nn.Module):
+    def __init__(self, hidden_dims=[512, 256], lr=1e-3, epochs=50, batch_size=256, **kwargs):
+        super().__init__()
+        self.hidden_dims = hidden_dims
+        self.lr = lr
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.fitted = False
+        self.net = None  # fit() 할 때 input_dim 보고 생성
+
+    def _build_net(self, input_dim):
+        dims = [input_dim] + self.hidden_dims + [1]
+        layers = []
+        for i in range(len(dims) - 1):
+            layers.append(nn.Linear(dims[i], dims[i+1]))
+            if i < len(dims) - 2:
+                layers.append(nn.ReLU())
+        self.net = nn.Sequential(*layers)
+
+    def fit(self, pos_X, neg_X):
+        pi = len(pos_X) / (len(pos_X) + len(neg_X))
+        self.dre_coeff = (1 - pi) / pi
+
+        X = torch.cat([pos_X, neg_X], dim=0).float()
+        y = torch.cat([torch.ones(len(pos_X)), torch.zeros(len(neg_X))]).float()
+
+        self._build_net(X.shape[1])
+        optimizer = torch.optim.Adam(self.net.parameters(), lr=self.lr)
+        dataset = torch.utils.data.TensorDataset(X, y)
+        loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+
+        self.net.train()
+        for epoch in range(self.epochs):
+            for xb, yb in loader:
+                optimizer.zero_grad()
+                loss = nn.functional.binary_cross_entropy_with_logits(
+                    self.net(xb).squeeze(-1), yb
+                )
+                loss.backward()
+                optimizer.step()
+
+        self.net.eval()
+        self.fitted = True
+        return self
+
+    def grad(self, X):
+        with torch.enable_grad():
+            X_req = X.detach().float().requires_grad_(True)
+            logit = self.net(X_req).squeeze(-1).sum()
+            grad = torch.autograd.grad(logit, X_req)[0]
+        return grad * self.dre_coeff

@@ -1,0 +1,8 @@
+type: MLPStepODESteer
+kwargs:
+  hidden_dims: [512, 256]
+  lr: 1e-3
+  epochs: 50
+  batch_size: 256
+T: 1.0
+name: ${steer.type}-T${steer.T}

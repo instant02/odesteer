@@ -12,15 +12,15 @@ from ._lin_act import LinAcT
 
 # ODESteer
 from ._ode_steer import BaseODESteer, ODESteer, RFFODESteer
-from ._step_ode_steer import BaseStepODESteer, StepODESteer, RFFStepODESteer    
+from ._step_ode_steer import BaseStepODESteer, StepODESteer, RFFStepODESteer, LinearStepODESteer, MLPStepODESteer, MLPStepODESteer
 
 __all__ = [
-    'Steer', 'VecSteer', 
+    'Steer', 'VecSteer',
     # Baselines
     'RepE', 'CAA', 'ITI', 'MiMiC', 'LinAcT',
     # ODESteer
     'BaseODESteer', 'ODESteer', 'RFFODESteer',
-    'BaseStepODESteer', 'StepODESteer', 'RFFStepODESteer',
+    'BaseStepODESteer', 'StepODESteer', 'RFFStepODESteer', 'LinearStepODESteer',
 ]
 
 def get_steer_model(name: str, *args, **kwargs) -> type[Steer]:

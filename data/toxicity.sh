@@ -20,3 +20,6 @@ uv run python -u data/toxicity/extract_activations.py -m Falcon-7B-Base -l 14 -b
 uv run python -u data/toxicity/extract_activations.py -m Mistral-7B-Base -l 15 -b 10
 uv run python -u data/toxicity/extract_activations.py -m Llama3.1-8B-Base -l 13 -b 10
 uv run python -u data/toxicity/extract_activations.py -m Qwen2.5-7B-Base -l 13 -b 10
+
+export HF_HOME=/workspace/huggingface_cache
+export TRANSFORMERS_CACHE=/workspace/huggingface_cache
