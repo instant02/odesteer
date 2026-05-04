@@ -82,6 +82,7 @@ def main():
     parser.add_argument('--T',          type=float, default=5.0)
     parser.add_argument('--batch_size', type=int,   default=10)
     parser.add_argument('--seed',       type=int,   default=42)
+    parser.add_argument('--loss',       type=str,   default='bce', choices=['bce', 'mse'])
     parser.add_argument('--lstm_path',  type=str,   default=None,
                         help='학습된 LSTM .pt 경로. 없으면 자동 탐색.')
     args = parser.parse_args()
@@ -90,13 +91,12 @@ def main():
 
     # LSTM 모델 경로
     if args.lstm_path is None:
-        last_k_str = f"last{args.last_k}" if args.last_k > 0 else "full"
         args.lstm_path = str(
             get_project_dir() / 'data' / 'toxicity' / 'activations' /
-            args.model / 'lstm_models' / f'lstm_{last_k_str}_layer{args.layer_idx}.pt'
+            args.model / 'lstm_models' / f'lstm_{args.loss}_layer{args.layer_idx}.pt'
         )
 
-    steer_name = f"LSTMSteer-last{args.last_k}-l{args.layer_idx}-T{args.T}"
+    steer_name = f"LSTMSteer-{args.loss}-l{args.layer_idx}-T{args.T}"
 
     output_dir = get_project_dir() / 'results' / 'toxicity' / 'raw_outputs' / args.model
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -125,7 +125,7 @@ def main():
     # LSTM 로드
     print(f"→ LSTM 로드: {args.lstm_path}")
     input_dim = model.config.hidden_size  # 4096
-    lstm_clf = LSTMClassifier(input_dim=input_dim, hidden_dim=256, num_layers=3, last_k=args.last_k)
+    lstm_clf = LSTMClassifier(input_dim=input_dim, hidden_dim=256, num_layers=3, loss_type=args.loss)
     lstm_clf.load_state_dict(torch.load(args.lstm_path, map_location='cpu', weights_only=True))
     lstm_clf.eval()
     lstm_steer = LSTMSteer(lstm=lstm_clf)

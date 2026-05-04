@@ -1,0 +1,14 @@
+데이터 로드 중...
+  BCE 모드 | non-toxic(1): 5000, toxic(0): 5000
+
+학습 시작 | loss=bce | device=cuda | params=5,511,425
+-----------------------------------------------------------------
+Epoch   1/5 | train loss: 0.5923 acc: 0.7069 | val loss: 0.5114 acc: 0.7550
+  ✓ 저장 (best val loss: 0.5114)
+Epoch   2/5 | train loss: 0.4847 acc: 0.7887 | val loss: 0.4591 acc: 0.7900
+  ✓ 저장 (best val loss: 0.4591)
+Epoch   3/5 | train loss: 0.4003 acc: 0.8332 | val loss: 0.4950 acc: 0.7840
+Epoch   4/5 | train loss: 0.3206 acc: 0.8743 | val loss: 0.5101 acc: 0.7690
+Epoch   5/5 | train loss: 0.2179 acc: 0.9226 | val loss: 0.5851 acc: 0.7730
+
+완료 | best val loss: 0.4591 | 저장: /workspace/odesteer/data/toxicity/activations/Llama3.1-8B-Base/lstm_models/lstm_bce_layer14.pt

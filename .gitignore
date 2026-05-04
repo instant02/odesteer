@@ -1,24 +1,33 @@
-# 데이터/결과 파일
-*.pt
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+
+# My folders
+notebooks/
+outputs/
+results/
+ckpts/
+shells/
+
+# Data
+texts/
+activations/
+!activations/**/lstm_models/*.pt
+!activations/**/lstm_models/*.json
+
+# File
+*.out
+# *.png
 *.csv
 *.jsonl
-*.json
-*.log
-*.out
-
-# 데이터/결과 디렉토리
-data/toxicity/jigsaw/
-data/toxicity/real_tox_prompts/
-data/toxicity/activations/
-data/truthfulqa/
-data/ultrafeedback/
-results/
-
-# Python
-__pycache__/
-*.pyc
-.venv/
-
-# 기타
-.env
-nohup.out
+.DS_Store

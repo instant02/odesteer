@@ -1,0 +1,7 @@
+#!/bin/bash
+
+uv run python -u data/toxicity/extract_trajectory_activations.py -m Llama3.1-8B-Base -l 13
+
+uv run python -u data/toxicity/train_lstm_clf.py -m Llama3.1-8B-Base -l 13 --loss bce --epochs 5
+
+uv run python -u scripts/toxicity/detox_generate_lstm.py --model Llama3.1-8B-Base --layer_idx 13 --loss bce --T 10.0
