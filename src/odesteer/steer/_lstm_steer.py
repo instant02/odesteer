@@ -90,9 +90,8 @@ class LSTMSteer:
             self.lstm.eval()
 
         last_grad = grad[:, -1, :].to(full_hidden.dtype)
-        last_grad_norm = last_grad / (last_grad.norm(dim=-1, keepdim=True) + 1e-10)
 
-        # BCE: non-toxic 방향(+), MSE: toxicity 낮추는 방향(-)
+        # BCE: non-toxic 방향(+), MSE: toxicity 낮추는 방향(-), normalize 없이 raw gradient
         sign = 1.0 if self.lstm.loss_type == 'bce' else -1.0
         steered_last = full_hidden[:, -1, :] + sign * T * last_grad
 

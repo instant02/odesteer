@@ -1,0 +1,17 @@
+데이터 로드 중...
+  MSE 모드 | label range: 0.000 ~ 1.000
+
+학습 시작 | loss=mse | device=cuda | params=5,511,425
+-----------------------------------------------------------------
+Epoch   1/5 | train loss: 0.0701 acc: 0.7029 | val loss: 0.0615 acc: 0.7460
+  ✓ 저장 (best val loss: 0.0615)
+Epoch   2/5 | train loss: 0.0554 acc: 0.7609 | val loss: 0.0591 acc: 0.7300
+  ✓ 저장 (best val loss: 0.0591)
+Epoch   3/5 | train loss: 0.0447 acc: 0.7932 | val loss: 0.0465 acc: 0.7790
+  ✓ 저장 (best val loss: 0.0465)
+Epoch   4/5 | train loss: 0.0353 acc: 0.8204 | val loss: 0.0460 acc: 0.7620
+  ✓ 저장 (best val loss: 0.0460)
+Epoch   5/5 | train loss: 0.0295 acc: 0.8393 | val loss: 0.0431 acc: 0.7960
+  ✓ 저장 (best val loss: 0.0431)
+
+완료 | best val loss: 0.0431 | 저장: /workspace/odesteer/data/toxicity/activations/Llama3.1-8B-Base/lstm_models/lstm_mse_layer13.pt
