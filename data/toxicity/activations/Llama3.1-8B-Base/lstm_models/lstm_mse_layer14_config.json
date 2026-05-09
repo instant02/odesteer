@@ -1,1 +1,1 @@
-{"loss_type": "mse", "layer_idx": 14}
+{"loss_type": "mse", "layer_idx": 14, "hidden_dim": 256, "num_layers": 1, "proj_dim": null}

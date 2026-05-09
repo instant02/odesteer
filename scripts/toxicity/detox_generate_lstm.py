@@ -9,9 +9,14 @@ LSTM Trajectory Steering으로 detox generation.
 
 import json
 import argparse
+import logging
+import warnings
 from functools import partial
 from pathlib import Path
 from tqdm import trange
+
+logging.getLogger("transformers").setLevel(logging.ERROR)
+warnings.filterwarnings("ignore")
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
@@ -29,7 +34,7 @@ from odesteer.steer._lstm_steer import LSTMClassifier, LSTMSteer
 def lstm_steer_hook(module, input, output, lstm_steer: LSTMSteer, T: float):
     hidden, reassemble = _extract_and_set_hidden(output)
     hidden = hidden.clone()
-    steered_last = lstm_steer.steer_with_context(hidden, T=T)
+    steered_last = lstm_steer.steer_with_context(hidden, T=T, steer_prefill=True)
     hidden[:, -1, :] = steered_last
     return reassemble(hidden)
 
@@ -82,7 +87,13 @@ def main():
     parser.add_argument('--T',          type=float, default=5.0)
     parser.add_argument('--batch_size', type=int,   default=10)
     parser.add_argument('--seed',       type=int,   default=42)
-    parser.add_argument('--loss',       type=str,   default='bce', choices=['bce', 'mse'])
+    parser.add_argument('--loss',       type=str,   default='bce', choices=['bce', 'mse', 'wasserstein'])
+    parser.add_argument('--threshold',  type=float, default=0.2,
+                        help='toxicity score 이상일 때만 steering 적용 (0.0이면 항상 적용)')
+    parser.add_argument('--n_steps',    type=int,   default=1,
+                        help='Euler step 횟수 (ODESteer처럼 반복 gradient)')
+    parser.add_argument('--use_barrier', action='store_true',
+                        help='log density ratio를 barrier weight로 사용')
     parser.add_argument('--lstm_path',  type=str,   default=None,
                         help='학습된 LSTM .pt 경로. 없으면 자동 탐색.')
     args = parser.parse_args()
@@ -96,7 +107,7 @@ def main():
             args.model / 'lstm_models' / f'lstm_{args.loss}_layer{args.layer_idx}.pt'
         )
 
-    steer_name = f"LSTMSteer-{args.loss}-l{args.layer_idx}-T{args.T}"
+    steer_name = f"LSTMSteer-{args.loss}-l{args.layer_idx}-T{args.T}-thr{args.threshold}-steps{args.n_steps}"
 
     output_dir = get_project_dir() / 'results' / 'toxicity' / 'raw_outputs' / args.model
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -125,10 +136,27 @@ def main():
     # LSTM 로드
     print(f"→ LSTM 로드: {args.lstm_path}")
     input_dim = model.config.hidden_size  # 4096
-    lstm_clf = LSTMClassifier(input_dim=input_dim, hidden_dim=256, num_layers=3, loss_type=args.loss)
+
+    # config json에서 하이퍼파라미터 복원 (없으면 기본값 사용)
+    config_path = Path(args.lstm_path).with_name(
+        Path(args.lstm_path).stem + '_config.json'
+    )
+    lstm_cfg = {}
+    if config_path.exists():
+        with open(config_path) as f:
+            lstm_cfg = json.load(f)
+        print(f"  config: {lstm_cfg}")
+
+    lstm_clf = LSTMClassifier(
+        input_dim=input_dim,
+        hidden_dim=lstm_cfg.get('hidden_dim', 256),
+        num_layers=lstm_cfg.get('num_layers', 1),
+        loss_type=args.loss,
+        proj_dim=lstm_cfg.get('proj_dim', None),
+    )
     lstm_clf.load_state_dict(torch.load(args.lstm_path, map_location='cpu', weights_only=True))
     lstm_clf.eval()
-    lstm_steer = LSTMSteer(lstm=lstm_clf)
+    lstm_steer = LSTMSteer(lstm=lstm_clf, threshold=args.threshold, n_steps=args.n_steps, use_barrier=args.use_barrier)
 
     # 프롬프트 로드
     print("→ RealToxicityPrompts 로드 중...")

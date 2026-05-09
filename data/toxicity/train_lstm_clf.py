@@ -34,7 +34,9 @@ class TrajectoryDataset(Dataset):
         max_len = activations.shape[1]
         for i in range(len(activations)):
             L = lengths[i].item()
-            self.seqs.append(activations[i, max_len - L:, :])  # left-pad 제거
+            act = activations[i, max_len - L:, :]  # left-pad 제거 [L, d]
+
+            self.seqs.append(act)
 
     def __len__(self):
         return len(self.seqs)
@@ -63,6 +65,9 @@ class LSTMClassifier(nn.Module):
 
     loss_type='bce': logit 출력 (sigmoid 없음), label = {0,1}
     loss_type='mse': sigmoid 출력 [0,1], label = continuous toxicity
+
+    proj_dim: int 이면 input_dim → proj_dim Linear projection 후 LSTM 입력.
+              None 이면 projection 없이 input_dim 그대로 사용.
     """
     def __init__(
         self,
@@ -71,11 +76,17 @@ class LSTMClassifier(nn.Module):
         num_layers: int = 3,
         dropout: float = 0.1,
         loss_type: str = 'bce',
+        proj_dim: int | None = None,
     ):
         super().__init__()
         self.loss_type = loss_type
+        self.proj = (
+            nn.Sequential(nn.Linear(input_dim, proj_dim), nn.ReLU())
+            if proj_dim is not None else None
+        )
+        lstm_input_dim = proj_dim if proj_dim is not None else input_dim
         self.lstm = nn.LSTM(
-            input_size=input_dim,
+            input_size=lstm_input_dim,
             hidden_size=hidden_dim,
             num_layers=num_layers,
             batch_first=True,
@@ -89,6 +100,8 @@ class LSTMClassifier(nn.Module):
         lengths: [B] 내림차순
         returns: [B] — bce면 logit, mse면 sigmoid
         """
+        if self.proj is not None:
+            x = self.proj(x)
         packed = pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=True)
         lstm_out, _ = self.lstm(packed)
         out, _ = pad_packed_sequence(lstm_out, batch_first=True)  # [B, seq_len, hidden]
@@ -105,8 +118,12 @@ class LSTMClassifier(nn.Module):
         pred = self.forward(x, lengths)
         if self.loss_type == 'bce':
             return nn.functional.binary_cross_entropy_with_logits(pred, labels)
-        else:
+        elif self.loss_type == 'mse':
             return nn.functional.mse_loss(pred, labels)
+        else:  # wasserstein
+            pred_sorted, _ = pred.sort()
+            target_sorted, _ = labels.sort()
+            return torch.abs(pred_sorted - target_sorted).mean()
 
     def predict_proba(self, x: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
         """항상 [0,1] 확률 반환."""
@@ -125,7 +142,7 @@ def train(args):
     lengths     = torch.load(f'{prefix}_lengths.pt',     weights_only=True)
     labels_raw  = torch.load(f'{prefix}_labels.pt',      weights_only=True)  # float 0~1
 
-    # BCE: 0.5 기준 이진화 / MSE: 연속값 그대로
+    # BCE: 0.5 기준 이진화 / MSE·Wasserstein: 연속값 그대로
     if args.loss == 'bce':
         labels = (labels_raw <= 0.5).float()   # 1=non-toxic, 0=toxic
         print(f"  BCE 모드 | non-toxic(1): {labels.sum():.0f}, toxic(0): {(1-labels).sum():.0f}")
@@ -152,6 +169,7 @@ def train(args):
         num_layers=args.num_layers,
         dropout=args.dropout,
         loss_type=args.loss,
+        proj_dim=args.proj_dim,
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
@@ -202,9 +220,16 @@ def train(args):
         if v_loss < best_val_loss:
             best_val_loss = v_loss
             torch.save(model.state_dict(), save_path)
-            # loss_type을 config로 함께 저장 (generate 시 부호 판단용)
-            json.dump({'loss_type': args.loss, 'layer_idx': args.layer_idx},
-                      open(save_dir / f'lstm_{args.loss}_layer{args.layer_idx}_config.json', 'w'))
+            json.dump(
+                {
+                    'loss_type': args.loss,
+                    'layer_idx': args.layer_idx,
+                    'hidden_dim': args.hidden_dim,
+                    'num_layers': args.num_layers,
+                    'proj_dim': args.proj_dim,
+                },
+                open(save_dir / f'lstm_{args.loss}_layer{args.layer_idx}_config.json', 'w'),
+            )
             print(f"  ✓ 저장 (best val loss: {best_val_loss:.4f})")
 
     print(f"\n완료 | best val loss: {best_val_loss:.4f} | 저장: {save_path}")
@@ -216,9 +241,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model',      type=str,   default='Llama3.1-8B-Base')
     parser.add_argument('-l', '--layer_idx',  type=int,   default=13)
-    parser.add_argument('--loss',             type=str,   default='bce', choices=['bce', 'mse'])
+    parser.add_argument('--loss',             type=str,   default='bce', choices=['bce', 'mse', 'wasserstein'])
     parser.add_argument('--hidden_dim',       type=int,   default=256)
-    parser.add_argument('--num_layers',       type=int,   default=3)
+    parser.add_argument('--num_layers',       type=int,   default=1)
+    parser.add_argument('--proj_dim',         type=int,   default=None,
+                        help='projection 레이어 출력 차원. None이면 projection 없음.')
     parser.add_argument('--dropout',          type=float, default=0.1)
     parser.add_argument('--lr',               type=float, default=1e-3)
     parser.add_argument('--epochs',           type=int,   default=20)

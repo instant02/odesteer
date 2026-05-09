@@ -1,61 +1,0 @@
-/workspace/odesteer/.venv/lib/python3.12/site-packages/transformers/utils/hub.py:111: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
-  warnings.warn(
-Seed set to 42
-→ LLM 로드 중...
-Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:02<00:08,  2.74s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:05<00:05,  2.76s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:08<00:02,  2.68s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:08<00:00,  1.84s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:08<00:00,  2.16s/it]
-→ LSTM 로드: /workspace/odesteer/data/toxicity/activations/Llama3.1-8B-Base/lstm_models/lstm_bce_layer14.pt
-→ RealToxicityPrompts 로드 중...
-→ 500개 프롬프트 생성 시작 (T=5.0)...
-  0%|          | 0/50 [00:00<?, ?it/s]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
-  2%|▏         | 1/50 [00:03<02:48,  3.45s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
-  4%|▍         | 2/50 [00:06<02:32,  3.18s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
-  6%|▌         | 3/50 [00:09<02:27,  3.14s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
-  8%|▊         | 4/50 [00:12<02:21,  3.07s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 10%|█         | 5/50 [00:15<02:18,  3.07s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 12%|█▏        | 6/50 [00:18<02:15,  3.07s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 14%|█▍        | 7/50 [00:21<02:11,  3.07s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 16%|█▌        | 8/50 [00:24<02:07,  3.04s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 18%|█▊        | 9/50 [00:27<02:05,  3.05s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 20%|██        | 10/50 [00:30<02:01,  3.03s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 22%|██▏       | 11/50 [00:33<01:58,  3.04s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 24%|██▍       | 12/50 [00:36<01:52,  2.95s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 26%|██▌       | 13/50 [00:39<01:47,  2.92s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 28%|██▊       | 14/50 [00:42<01:43,  2.87s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 30%|███       | 15/50 [00:45<01:41,  2.90s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 32%|███▏      | 16/50 [00:48<01:39,  2.91s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 34%|███▍      | 17/50 [00:51<01:37,  2.97s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 36%|███▌      | 18/50 [00:54<01:35,  2.99s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 38%|███▊      | 19/50 [00:57<01:32,  2.98s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 40%|████      | 20/50 [01:00<01:32,  3.07s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 42%|████▏     | 21/50 [01:03<01:28,  3.04s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 44%|████▍     | 22/50 [01:06<01:25,  3.05s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 46%|████▌     | 23/50 [01:09<01:21,  3.03s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 48%|████▊     | 24/50 [01:12<01:18,  3.02s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 50%|█████     | 25/50 [01:15<01:15,  3.03s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 52%|█████▏    | 26/50 [01:18<01:12,  3.02s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 54%|█████▍    | 27/50 [01:21<01:08,  2.98s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 56%|█████▌    | 28/50 [01:24<01:05,  2.97s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 58%|█████▊    | 29/50 [01:27<01:03,  3.01s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 60%|██████    | 30/50 [01:30<01:00,  3.00s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 62%|██████▏   | 31/50 [01:33<00:56,  2.98s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 64%|██████▍   | 32/50 [01:36<00:54,  3.04s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 66%|██████▌   | 33/50 [01:39<00:51,  3.05s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 68%|██████▊   | 34/50 [01:42<00:49,  3.06s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 70%|███████   | 35/50 [01:45<00:45,  3.04s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 72%|███████▏  | 36/50 [01:48<00:42,  3.06s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 74%|███████▍  | 37/50 [01:51<00:39,  3.03s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 76%|███████▌  | 38/50 [01:54<00:36,  3.04s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 78%|███████▊  | 39/50 [01:57<00:33,  3.05s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 80%|████████  | 40/50 [02:00<00:30,  3.06s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 82%|████████▏ | 41/50 [02:04<00:27,  3.09s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 84%|████████▍ | 42/50 [02:07<00:24,  3.09s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 86%|████████▌ | 43/50 [02:10<00:21,  3.08s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 88%|████████▊ | 44/50 [02:13<00:18,  3.05s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 90%|█████████ | 45/50 [02:16<00:15,  3.03s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 92%|█████████▏| 46/50 [02:19<00:12,  3.01s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 94%|█████████▍| 47/50 [02:22<00:09,  3.03s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 96%|█████████▌| 48/50 [02:25<00:06,  3.04s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
- 98%|█████████▊| 49/50 [02:28<00:03,  3.02s/it]Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
-100%|██████████| 50/50 [02:31<00:00,  3.01s/it]100%|██████████| 50/50 [02:31<00:00,  3.03s/it]
-→ 저장 중: Llama3.1-8B-Base-l14-LSTMSteer-bce-l14-T5.0-RealToxicityPrompts-seed42.jsonl
-✓ 완료: 500개 생성

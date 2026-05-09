@@ -6,7 +6,9 @@ Downloads MMLU data automatically via HuggingFace datasets.
 """
 
 import argparse
+import json
 from functools import partial
+from pathlib import Path
 
 import torch
 from datasets import load_dataset
@@ -42,7 +44,7 @@ def get_few_shots(dataset, n=5):
 def lstm_steer_hook(module, input, output, lstm_steer, T):
     hidden, reassemble = _extract_and_set_hidden(output)
     hidden = hidden.clone()
-    steered_last = lstm_steer.steer_with_context(hidden, T=T)
+    steered_last = lstm_steer.steer_with_context(hidden, T=T, steer_prefill=True)
     hidden[:, -1, :] = steered_last
     return reassemble(hidden)
 
@@ -93,10 +95,16 @@ def main():
     parser.add_argument('--model',      type=str,   default='Llama3.1-8B-Base')
     parser.add_argument('--layer_idx',  type=int,   default=13)
     parser.add_argument('--T',          type=float, default=10.0)
-    parser.add_argument('--loss',       type=str,   default='bce')
+    parser.add_argument('--loss',       type=str,   default='bce', choices=['bce', 'mse', 'wasserstein'])
     parser.add_argument('--num_shots',  type=int,   default=5)
     parser.add_argument('--lstm_path',  type=str,   default=None)
     parser.add_argument('--batch_size', type=int,   default=8)
+    parser.add_argument('--threshold',  type=float, default=0.0,
+                        help='toxicity score 이상일 때만 steering 적용 (0.0이면 항상 적용)')
+    parser.add_argument('--n_steps',    type=int,   default=1,
+                        help='Euler step 횟수 (ODESteer처럼 반복 gradient)')
+    parser.add_argument('--use_barrier', action='store_true',
+                        help='log density ratio를 barrier weight로 사용')
     args = parser.parse_args()
 
     if args.lstm_path is None:
@@ -113,13 +121,25 @@ def main():
 
     # LSTM 로드
     print(f"→ LSTM 로드: {args.lstm_path}")
+    config_path = Path(args.lstm_path).with_name(
+        Path(args.lstm_path).stem + '_config.json'
+    )
+    lstm_cfg = {}
+    if config_path.exists():
+        with open(config_path) as f:
+            lstm_cfg = json.load(f)
+        print(f"  config: {lstm_cfg}")
+
     lstm_clf = LSTMClassifier(
         input_dim=model.config.hidden_size,
-        hidden_dim=256, num_layers=3, loss_type=args.loss
+        hidden_dim=lstm_cfg.get('hidden_dim', 256),
+        num_layers=lstm_cfg.get('num_layers', 1),
+        loss_type=args.loss,
+        proj_dim=lstm_cfg.get('proj_dim', None),
     )
     lstm_clf.load_state_dict(torch.load(args.lstm_path, map_location='cpu', weights_only=True))
     lstm_clf.eval()
-    lstm_steer = LSTMSteer(lstm=lstm_clf)
+    lstm_steer = LSTMSteer(lstm=lstm_clf, threshold=args.threshold, n_steps=args.n_steps, use_barrier=args.use_barrier)
 
     # MMLU 로드
     print("→ MMLU 로드 중...")
@@ -143,9 +163,10 @@ def main():
         writer = csv.DictWriter(f, fieldnames=['Model', 'Steering Method', 'MMLU Accuracy'])
         if write_header:
             writer.writeheader()
+        thr_str = f'-thr{args.threshold}' if args.threshold > 0.0 else ''
         writer.writerow({
             'Model': args.model,
-            'Steering Method': f'LSTMSteer-{args.loss}-l{args.layer_idx}-T{args.T}',
+            'Steering Method': f'LSTMSteer-{args.loss}-l{args.layer_idx}-T{args.T}{thr_str}',
             'MMLU Accuracy': f'{acc_steer:.4f}',
         })
     print(f"✓ 저장: {result_path}")
