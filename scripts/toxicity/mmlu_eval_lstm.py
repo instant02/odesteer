@@ -104,7 +104,9 @@ def main():
     parser.add_argument('--n_steps',    type=int,   default=1,
                         help='Euler step 횟수 (ODESteer처럼 반복 gradient)')
     parser.add_argument('--use_barrier', action='store_true',
-                        help='log density ratio를 barrier weight로 사용')
+                        help='항상 고정 step steering (ODESteer 방식)')
+    parser.add_argument('--use_score',  action='store_true',
+                        help='toxicity score 비례 steering (toxic할수록 강하게)')
     args = parser.parse_args()
 
     if args.lstm_path is None:
@@ -138,8 +140,9 @@ def main():
         proj_dim=lstm_cfg.get('proj_dim', None),
     )
     lstm_clf.load_state_dict(torch.load(args.lstm_path, map_location='cpu', weights_only=True))
+    lstm_clf.lstm.dropout = 0.0  # cuDNN train 모드에서 dropout 제거
     lstm_clf.eval()
-    lstm_steer = LSTMSteer(lstm=lstm_clf, threshold=args.threshold, n_steps=args.n_steps, use_barrier=args.use_barrier)
+    lstm_steer = LSTMSteer(lstm=lstm_clf, threshold=args.threshold, n_steps=args.n_steps, use_barrier=args.use_barrier, use_score=args.use_score)
 
     # MMLU 로드
     print("→ MMLU 로드 중...")

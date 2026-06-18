@@ -67,12 +67,13 @@ class LSTMSteer:
     MiMiC (ICML 2024)처럼 toxicity threshold 이상일 때만 steering 적용.
     n_steps > 1: ODESteer처럼 Euler 방식으로 n_steps번 반복 gradient step.
     """
-    def __init__(self, lstm: LSTMClassifier, threshold: float = 0.2, n_steps: int = 1, use_barrier: bool = False):
+    def __init__(self, lstm: LSTMClassifier, threshold: float = 0.2, n_steps: int = 1, use_barrier: bool = False, use_score: bool = False):
         self.lstm = lstm
         self.trajectory: Tensor | None = None
-        self.threshold = threshold      # toxicity score 이상일 때만 steering
-        self.n_steps = n_steps          # Euler step 횟수
-        self.use_barrier = use_barrier  # log density ratio를 barrier weight로 사용
+        self.threshold = threshold
+        self.use_barrier = use_barrier
+        self.use_score = use_score
+        self.n_steps = n_steps
 
     def reset_trajectory(self):
         self.trajectory = None
@@ -119,31 +120,28 @@ class LSTMSteer:
                 traj_req = traj_input.float().requires_grad_(True)
                 scores = self.lstm(traj_req, lengths)  # [B]
                 grad = torch.autograd.grad(scores.sum(), traj_req)[0]  # [B, seq_len, d]
-                self.lstm.eval()
 
             last_grad = grad[:, -1, :].to(full_hidden.dtype)
             last_grad = last_grad / (last_grad.norm(dim=-1, keepdim=True) + 1e-8)
 
-            if self.use_barrier:
-                # log density ratio를 barrier weight로 사용
-                if self.lstm.loss_type == 'bce':
-                    barrier = scores.detach()  # raw logit = log P(non-toxic|h) / P(toxic|h)
-                    toxicity = scores.detach().sigmoid()
-                else:
-                    s = scores.detach().clamp(1e-6, 1 - 1e-6)
-                    barrier = torch.log((1 - s) / s)  # non-toxic log-odds
-                    toxicity = s
-                # threshold 초과할 때만 barrier weight 적용
-                mask = (toxicity > self.threshold).to(full_hidden.dtype)
-                weight = torch.sigmoid(-barrier).to(full_hidden.dtype) * mask  # [B]
+            # BCE: scores = logit, P(non-toxic) = sigmoid(scores) → P(toxic) = 1 - sigmoid(scores)
+            # MSE: scores = sigmoid(logit) = toxicity score directly
+            if self.lstm.loss_type == 'bce':
+                toxicity = 1.0 - scores.detach().sigmoid()  # P(toxic) [0,1]
             else:
-                # toxicity score: BCE는 sigmoid, MSE/Wasserstein은 그대로
-                if self.lstm.loss_type == 'bce':
-                    toxicity = scores.detach().sigmoid()  # [B]
-                else:
-                    toxicity = scores.detach()            # [B]
-                # threshold 이상일 때만 steering (MiMiC 방식)
-                weight = (toxicity > self.threshold).to(full_hidden.dtype)  # [B]
+                toxicity = scores.detach()                  # toxicity score [0,1]
+
+            mask = (toxicity > self.threshold).to(full_hidden.dtype)
+
+            if self.use_barrier:
+                # ODESteer처럼 항상 고정 step (weighting 없음)
+                weight = torch.ones(toxicity.shape, dtype=full_hidden.dtype, device=full_hidden.device)
+            elif self.use_score:
+                # toxicity score 비례 (toxic할수록 강하게)
+                weight = toxicity.to(full_hidden.dtype) * mask
+            else:
+                # threshold 이상이면 full steering (MiMiC 방식)
+                weight = mask
 
             current_last = current_last + sign * step_T * last_grad * weight.unsqueeze(-1)
 

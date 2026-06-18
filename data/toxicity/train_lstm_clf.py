@@ -10,6 +10,7 @@ Loss 옵션:
 
 import argparse
 import json
+import random
 
 import torch
 import torch.nn as nn
@@ -55,6 +56,53 @@ def collate_fn(batch):
         padded[i, :s.shape[0]] = s
     lengths, sort_idx = lengths.sort(descending=True)
     return padded[sort_idx], lengths, torch.stack(labels)[sort_idx]
+
+
+class ContrastiveTrajectoryDataset(Dataset):
+    """
+    각 target sample에 대해 반대 toxicity의 context를 앞에 붙여 학습.
+    target label=0.7 → context는 low-toxic(≤0.5) 샘플
+    target label=0.2 → context는 high-toxic(>0.5) 샘플
+    """
+    def __init__(self, activations: torch.Tensor, lengths: torch.Tensor, labels: torch.Tensor):
+        self.labels = labels.float()
+        max_len = activations.shape[1]
+
+        high_idx = (labels > 0.5).nonzero(as_tuple=True)[0].tolist()
+        low_idx  = (labels <= 0.5).nonzero(as_tuple=True)[0].tolist()
+
+        self.seqs     = []
+        self.ctx_seqs = []
+        for i in range(len(activations)):
+            L = lengths[i].item()
+            self.seqs.append(activations[i, max_len - L:])
+
+            ctx_i = random.choice(low_idx if labels[i] > 0.5 else high_idx)
+            ctx_L = lengths[ctx_i].item()
+            self.ctx_seqs.append(activations[ctx_i, max_len - ctx_L:])
+
+    def __len__(self):
+        return len(self.seqs)
+
+    def __getitem__(self, idx):
+        return self.ctx_seqs[idx], self.seqs[idx], self.labels[idx]
+
+
+def contrastive_collate_fn(batch):
+    ctx_seqs, tgt_seqs, labels = zip(*batch)
+    d = tgt_seqs[0].shape[1]
+
+    def _pad_and_sort(seqs):
+        lens = torch.tensor([s.shape[0] for s in seqs])
+        padded = torch.zeros(len(seqs), lens.max().item(), d)
+        for i, s in enumerate(seqs):
+            padded[i, :s.shape[0]] = s
+        lens, sort_idx = lens.sort(descending=True)
+        return padded[sort_idx], lens, sort_idx
+
+    ctx_x, ctx_lens, ctx_sort = _pad_and_sort(ctx_seqs)
+    tgt_x, tgt_lens, tgt_sort = _pad_and_sort(tgt_seqs)
+    return ctx_x, ctx_lens, ctx_sort, tgt_x, tgt_lens, tgt_sort, torch.stack(labels)[tgt_sort]
 
 
 # ────────────────────────── Model ────────────────────────────────
@@ -154,11 +202,16 @@ def train(args):
         list(range(len(labels))), test_size=0.1, random_state=42
     )
 
-    def make_ds(idx):
-        return TrajectoryDataset(activations[idx], lengths[idx], labels[idx])
-
-    train_loader = DataLoader(make_ds(train_idx), batch_size=args.batch_size, shuffle=True,  collate_fn=collate_fn)
-    val_loader   = DataLoader(make_ds(val_idx),   batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn)
+    if args.use_context:
+        def make_ds(idx):
+            return ContrastiveTrajectoryDataset(activations[idx], lengths[idx], labels[idx])
+        train_loader = DataLoader(make_ds(train_idx), batch_size=args.batch_size, shuffle=True,  collate_fn=contrastive_collate_fn)
+        val_loader   = DataLoader(make_ds(val_idx),   batch_size=args.batch_size, shuffle=False, collate_fn=contrastive_collate_fn)
+    else:
+        def make_ds(idx):
+            return TrajectoryDataset(activations[idx], lengths[idx], labels[idx])
+        train_loader = DataLoader(make_ds(train_idx), batch_size=args.batch_size, shuffle=True,  collate_fn=collate_fn)
+        val_loader   = DataLoader(make_ds(val_idx),   batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn)
 
     device    = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     input_dim = activations.shape[2]
@@ -177,40 +230,89 @@ def train(args):
 
     save_dir  = act_dir / 'lstm_models'
     save_dir.mkdir(exist_ok=True)
-    save_path = save_dir / f'lstm_{args.loss}_layer{args.layer_idx}.pt'
+    ctx_suffix = '_ctx' if args.use_context else ''
+    save_path = save_dir / f'lstm_{args.loss}_layer{args.layer_idx}{ctx_suffix}.pt'
 
     best_val_loss = float('inf')
 
-    print(f"\n학습 시작 | loss={args.loss} | device={device} | params={sum(p.numel() for p in model.parameters()):,}")
+    ctx_str = ' + contrastive context' if args.use_context else ''
+    print(f"\n학습 시작 | loss={args.loss}{ctx_str} | device={device} | params={sum(p.numel() for p in model.parameters()):,}")
     print("-" * 65)
+
+    def _forward_with_context(ctx_x, ctx_lens, ctx_sort, tgt_x, tgt_lens, tgt_sort, y):
+        # 1. context: no grad, get (h, c)
+        with torch.no_grad():
+            ctx_input = model.proj(ctx_x) if model.proj is not None else ctx_x
+            ctx_packed = pack_padded_sequence(ctx_input, ctx_lens.cpu(), batch_first=True, enforce_sorted=True)
+            _, (h, c) = model.lstm(ctx_packed)
+            # unsort ctx → original order → re-sort by tgt_sort
+            _, ctx_unsort = ctx_sort.sort()
+            h = h[:, ctx_unsort][:, tgt_sort]
+            c = c[:, ctx_unsort][:, tgt_sort]
+
+        # 2. target: with grad, init (h, c) from context
+        tgt_input = model.proj(tgt_x) if model.proj is not None else tgt_x
+        tgt_packed = pack_padded_sequence(tgt_input, tgt_lens.cpu(), batch_first=True, enforce_sorted=True)
+        lstm_out, _ = model.lstm(tgt_packed, (h, c))
+        out, _ = pad_packed_sequence(lstm_out, batch_first=True)
+        last_hidden = out[torch.arange(len(tgt_lens)), tgt_lens - 1]
+        logit = model.head(last_hidden).squeeze(-1)
+        if model.loss_type == 'mse':
+            pred = logit.sigmoid()
+            loss = nn.functional.mse_loss(pred, y)
+        else:
+            pred = logit.sigmoid()
+            loss = nn.functional.binary_cross_entropy_with_logits(logit, y)
+        return loss, pred
 
     for epoch in range(1, args.epochs + 1):
         # train
         model.train()
         tr_loss, tr_correct, tr_total = 0.0, 0, 0
-        for x, lens, y in train_loader:
-            x, y = x.to(device), y.to(device)
-            optimizer.zero_grad()
-            loss = model.compute_loss(x, lens, y)
-            loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-            tr_loss += loss.item() * len(y)
-            prob = model.predict_proba(x, lens)
-            tr_correct += ((prob > 0.5) == (y > 0.5)).sum().item()
-            tr_total   += len(y)
+
+        if args.use_context:
+            for ctx_x, ctx_lens, ctx_sort, tgt_x, tgt_lens, tgt_sort, y in train_loader:
+                ctx_x, tgt_x, y = ctx_x.to(device), tgt_x.to(device), y.to(device)
+                optimizer.zero_grad()
+                loss, prob = _forward_with_context(ctx_x, ctx_lens, ctx_sort, tgt_x, tgt_lens, tgt_sort, y)
+                loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
+                tr_loss += loss.item() * len(y)
+                tr_correct += ((prob > 0.5) == (y > 0.5)).sum().item()
+                tr_total   += len(y)
+        else:
+            for x, lens, y in train_loader:
+                x, y = x.to(device), y.to(device)
+                optimizer.zero_grad()
+                loss = model.compute_loss(x, lens, y)
+                loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
+                tr_loss += loss.item() * len(y)
+                prob = model.predict_proba(x, lens)
+                tr_correct += ((prob > 0.5) == (y > 0.5)).sum().item()
+                tr_total   += len(y)
         scheduler.step()
 
         # val
         model.eval()
         va_loss, va_correct, va_total = 0.0, 0, 0
         with torch.no_grad():
-            for x, lens, y in val_loader:
-                x, y = x.to(device), y.to(device)
-                va_loss += model.compute_loss(x, lens, y).item() * len(y)
-                prob = model.predict_proba(x, lens)
-                va_correct += ((prob > 0.5) == (y > 0.5)).sum().item()
-                va_total   += len(y)
+            if args.use_context:
+                for ctx_x, ctx_lens, ctx_sort, tgt_x, tgt_lens, tgt_sort, y in val_loader:
+                    ctx_x, tgt_x, y = ctx_x.to(device), tgt_x.to(device), y.to(device)
+                    loss, prob = _forward_with_context(ctx_x, ctx_lens, ctx_sort, tgt_x, tgt_lens, tgt_sort, y)
+                    va_loss += loss.item() * len(y)
+                    va_correct += ((prob > 0.5) == (y > 0.5)).sum().item()
+                    va_total   += len(y)
+            else:
+                for x, lens, y in val_loader:
+                    x, y = x.to(device), y.to(device)
+                    va_loss += model.compute_loss(x, lens, y).item() * len(y)
+                    prob = model.predict_proba(x, lens)
+                    va_correct += ((prob > 0.5) == (y > 0.5)).sum().item()
+                    va_total   += len(y)
 
         v_loss = va_loss / va_total
         print(f"Epoch {epoch:3d}/{args.epochs} | "
@@ -227,8 +329,9 @@ def train(args):
                     'hidden_dim': args.hidden_dim,
                     'num_layers': args.num_layers,
                     'proj_dim': args.proj_dim,
+                    'use_context': args.use_context,
                 },
-                open(save_dir / f'lstm_{args.loss}_layer{args.layer_idx}_config.json', 'w'),
+                open(save_dir / f'lstm_{args.loss}_layer{args.layer_idx}{ctx_suffix}_config.json', 'w'),
             )
             print(f"  ✓ 저장 (best val loss: {best_val_loss:.4f})")
 
@@ -250,5 +353,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr',               type=float, default=1e-3)
     parser.add_argument('--epochs',           type=int,   default=20)
     parser.add_argument('--batch_size',       type=int,   default=64)
+    parser.add_argument('--use_context',      action='store_true',
+                        help='반대 toxicity context를 앞에 붙여 contrastive 학습')
     args = parser.parse_args()
     train(args)
